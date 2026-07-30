@@ -1,0 +1,13 @@
+[package]
+name = "flt-01"
+version = "0.1.0"
+edition = "2024"
+authors = ["GOGIK <gogik.audio@gmail.com>"]
+description = "GOGIK FLT-01 Module"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[dependencies]
+nih_plug = { git = "https://github.com/robbert-vdh/nih-plug.git", features = ["assert_process_allocs", "standalone"] }
+nih_plug_egui = { git = "https://github.com/robbert-vdh/nih-plug.git" }
