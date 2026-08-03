@@ -60,7 +60,7 @@ impl Default for Flt01 {
     fn default() -> Self {
         Self { 
             params: Arc::new(Flt01Params {
-                editor_state: EguiState::from_size(340, 685),
+                editor_state: EguiState::from_size(340, 740),
 
                 filter_type: EnumParam::new(
                     "Type",
@@ -78,7 +78,7 @@ impl Default for Flt01 {
             )
             .with_unit(" Hz")
             .with_step_size(0.1)
-            .with_smoother(SmoothingStyle::Linear(5.0)),
+            .with_smoother(SmoothingStyle::Logarithmic(50.0)),
 
             resonance: FloatParam::new(
                 "Resonance", 
@@ -87,7 +87,7 @@ impl Default for Flt01 {
             )
             .with_unit(" %")
             .with_step_size(1.0)
-            .with_smoother(SmoothingStyle::Linear(5.0)),
+            .with_smoother(SmoothingStyle::Linear(50.0)),
             
             drive: FloatParam::new(
                 "Drive",
@@ -95,7 +95,7 @@ impl Default for Flt01 {
                 FloatRange::Linear { min: 1.0, max: 20.0 },
             )
             .with_step_size(0.1)
-            .with_smoother(SmoothingStyle::Linear(5.0)),
+            .with_smoother(SmoothingStyle::Linear(50.0)),
 
             slope: BoolParam::new("Slope 24dB", false),
 
@@ -104,6 +104,7 @@ impl Default for Flt01 {
                 100.0,
                 FloatRange::Linear { min: 0.0, max: 100.0 },
             )
+            .with_smoother(SmoothingStyle::Linear(50.0))
             .with_unit(" %")
             .with_step_size(0.1),
 
@@ -157,27 +158,29 @@ impl Plugin for Flt01 {
             let cutoff = self.params.cutoff.smoothed.next();
             let raw_resonance = self.params.resonance.smoothed.next();
             let filter_type = self.params.filter_type.value();
-
             let drive = self.params.drive.smoothed.next();
+
+            let mix_val = self.params.mix.smoothed.next() / 100.0;
+
+            let out_gain_db = self.params.out_level.smoothed.next();
+            let out_gain_linear = nih_plug::util::db_to_gain(out_gain_db);
 
             // Ограничиваем срез
             let clamped_cutoff = cutoff.clamp(20.0, self.sample_rate / 2.1);
             let g = 2.0 * (std::f32::consts::PI * clamped_cutoff / self.sample_rate).tan();
-            
             let res_normalized = raw_resonance / 100.0;
             // Коэффициент демпфирования
             let k = 2.0 - (1.9 * res_normalized);
-
             let a1 = 1.0 / (1.0 + g * k + g *g);
             let a2 = g * a1;
             let a3 = g * a2;
 
             // Обработка левого канала
             if let Some(left) = channel_samples.get_mut(0) {
-                let distorted_left = (*left * drive).tanh();
+                let clean_left = *left;
+                let distorted_left = (clean_left * drive).tanh();
 
                 let v3 = distorted_left - self.lp_l;
-                
                 let v1 = a1 *self.bp_l + a2 * v3;
                 let v2 = self.lp_l + a2 * self.bp_l + a3 * v3;
 
@@ -186,20 +189,23 @@ impl Plugin for Flt01 {
 
                 let hp = distorted_left - k * v1 - v2;
 
-                *left = match filter_type {
+                let wet_left = match filter_type {
                     FilterType::Lowpass => self.lp_l,
                     FilterType::Highpass => hp,
                     FilterType::Bandpass => self.bp_l,
                     FilterType::Notch => hp + self.lp_l,
                 };
+
+                let mixed_left = clean_left * (1.0 - mix_val) + wet_left * mix_val;
+                *left = mixed_left * out_gain_linear;
             }
 
             // Обработка правого канала
             if let Some(right) = channel_samples.get_mut(1) {
+                let clean_right = *right;
                 let distorted_right = (*right * drive).tanh();
                 
                 let v3 = distorted_right - self.lp_r;
-
                 let v1 = a1 * self.bp_r + a2 * v3;
                 let v2 = self.lp_r + a2 * self.bp_r + a3 * v3;
 
@@ -208,12 +214,15 @@ impl Plugin for Flt01 {
 
                 let hp = distorted_right - k * v1 - v2;
 
-                *right = match filter_type {
+                let wet_right = match filter_type {
                     FilterType::Lowpass => self.lp_r,
                     FilterType::Highpass => hp,
                     FilterType::Bandpass => self.bp_r,
                     FilterType::Notch => hp + self.lp_r,
                 };
+
+                let mixed_right = clean_right * (1.0 - mix_val) + wet_right * mix_val;
+                *right = mixed_right * out_gain_linear;
             }
         }
 

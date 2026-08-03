@@ -1,6 +1,10 @@
 use nih_plug::prelude::Editor;
-use nih_plug_egui::{EguiState, create_egui_editor, egui::{self, FontId}, widgets};
+use nih_plug_egui::{EguiState, create_egui_editor, egui};
 use std::sync::Arc;
+
+use gog_common::{
+    setup_industrial_style, bento_frame, section_header, bento_button, bento_slider, ACCENT_RED, TEXT_DARK
+};
 
 // Импортируем структуру параметров из lib.rs
 use crate::{Flt01Params, FilterType};
@@ -16,26 +20,8 @@ pub fn create_ui(
         params,
         |_, _| {},
         move |egui_ctx, param_setter, _state| {
-            let mut style = (*egui_ctx.style()).clone();
-            let mut visuals = egui::Visuals::dark();
 
-            visuals.widgets.noninteractive.bg_fill = egui::Color32::from_rgb(17, 17, 17);
-            visuals.selection.bg_fill = egui::Color32::from_rgb(255, 0, 51); 
-            
-            visuals.widgets.inactive.fg_stroke.color = egui::Color32::WHITE;
-
-            style.visuals = visuals;
-            style.override_font_id = Some(FontId::monospace(14.0));
-
-            egui_ctx.set_style(style);
-
-            let bento_frame = || {
-                egui::Frame::NONE
-                    .fill(egui::Color32::from_rgb(25, 25, 25))
-                    .corner_radius(4.0)
-                    .inner_margin(12.0)
-                    .stroke(egui::Stroke::new(1.0, egui::Color32::from_rgb(40, 40, 40)))
-            };
+            setup_industrial_style(egui_ctx);
 
             egui::CentralPanel::default().show(egui_ctx, |ui| {
                 ui.vertical(|ui| {
@@ -46,7 +32,7 @@ pub fn create_ui(
                     bento_frame().show(ui, |ui| {
                         ui.vertical(|ui| {
                             ui.set_width(ui.available_width());
-                            ui.label(egui::RichText::new("01 // TELEMETRY").color(egui::Color32::from_rgb(150, 150, 150)));
+                            section_header(ui, "01 // TELEMETRY");
                             ui.add_space(8.0);
 
                             let (response, painter) = ui.allocate_painter(
@@ -187,7 +173,7 @@ pub fn create_ui(
                                 points.push(egui::pos2(px, py));
                             }
 
-                            let stroke = egui::Stroke::new(2.0, egui::Color32::from_rgb(255, 0, 51));
+                            let stroke = egui::Stroke::new(2.0, ACCENT_RED);
                             painter.add(egui::Shape::line(points, stroke));
 
                             let y_bottom = rect.bottom() - 4.0;
@@ -228,59 +214,28 @@ pub fn create_ui(
                     bento_frame().show(ui, |ui| {
                         ui.vertical(|ui| {
                             ui.set_width(ui.available_width());
+                            section_header(ui, "02 // FILTER TYPE");
                             
-                            ui.label(egui::RichText::new("02 // FILTER TYPE").color(egui::Color32::from_rgb(150, 150, 150)));
-                            ui.add_space(12.0);
+                            let current_type = params_clone.filter_type.value();
+
+                            let filter_btn = |ui: &mut egui::Ui, label: &str, f_type: FilterType| {
+                                if bento_button(ui, label, current_type == f_type, None) {
+                                    param_setter.begin_set_parameter(&params_clone.filter_type);
+                                    param_setter.set_parameter(&params_clone.filter_type, f_type);
+                                    param_setter.end_set_parameter(&params_clone.filter_type);
+                                }
+                            };
                             
-                            ui.scope(|ui| {
-                                ui.visuals_mut().widgets.inactive.bg_fill = egui::Color32::from_gray(35); 
-                                ui.visuals_mut().widgets.inactive.bg_stroke = egui::Stroke::new(1.0, egui::Color32::from_gray(60));
-                                ui.visuals_mut().widgets.inactive.fg_stroke.color = egui::Color32::from_gray(180);
-
-                                ui.visuals_mut().widgets.hovered.bg_fill = egui::Color32::from_gray(55); 
-                                ui.visuals_mut().widgets.hovered.bg_stroke = egui::Stroke::new(1.0, egui::Color32::from_gray(90));
-                                ui.visuals_mut().widgets.hovered.fg_stroke.color = egui::Color32::WHITE;
-
-                                let radius = egui::CornerRadius::same(2);
-                                ui.visuals_mut().widgets.inactive.corner_radius = radius;
-                                ui.visuals_mut().widgets.hovered.corner_radius = radius;
-                                ui.visuals_mut().widgets.active.corner_radius = radius;
-
-                                let filter_btn = |ui: &mut egui::Ui, label: &str, f_type: FilterType| {
-                                    let is_active = params_clone.filter_type.value() == f_type;
-
-                                    let text_color = if is_active {
-                                        egui::Color32::WHITE
-                                    } else {
-                                        ui.visuals().widgets.inactive.fg_stroke.color
-                                    };
-
-                                    let mut button = egui::Button::new(egui::RichText::new(label).color(text_color));
-
-                                    if is_active {
-                                        button = button
-                                            .fill(egui::Color32::from_rgb(255, 0, 51))
-                                            .stroke(egui::Stroke::NONE);
-                                    }
-
-                                    if ui.add(button).clicked() {
-                                        param_setter.begin_set_parameter(&params_clone.filter_type);
-                                        param_setter.set_parameter(&params_clone.filter_type, f_type);
-                                        param_setter.end_set_parameter(&params_clone.filter_type);
-                                    }
-                                };
-                                
-                                ui.horizontal(|ui| {
-                                    ui.vertical(|ui| {
-                                        filter_btn(ui, "[ LPF ] LOWPASS ", FilterType::Lowpass);
-                                        ui.add_space(4.0);
-                                        filter_btn(ui, "[ BPF ] BANDPASS", FilterType::Bandpass);
-                                    });
-                                    ui.vertical(|ui| {
-                                        filter_btn(ui, "[ HPF ] HIGHPASS", FilterType::Highpass);
-                                        ui.add_space(4.0);
-                                        filter_btn(ui, "[ NTC ]  NOTCH  ", FilterType::Notch);
-                                    });
+                            ui.horizontal(|ui| {
+                                ui.vertical(|ui| {
+                                    filter_btn(ui, "[ LPF ] LOWPASS ", FilterType::Lowpass);
+                                    ui.add_space(4.0);
+                                    filter_btn(ui, "[ BPF ] BANDPASS", FilterType::Bandpass);
+                                });
+                                ui.vertical(|ui| {
+                                    filter_btn(ui, "[ HPF ] HIGHPASS", FilterType::Highpass);
+                                    ui.add_space(4.0);
+                                    filter_btn(ui, "[ NTC ]  NOTCH  ", FilterType::Notch);
                                 });
                             });
                         });
@@ -290,76 +245,27 @@ pub fn create_ui(
                     bento_frame().show(ui, |ui| {
                         ui.vertical(|ui| { 
                             ui.set_width(ui.available_width());
-                            
-                            ui.label(egui::RichText::new("03 // CORE CONTROLS").color(egui::Color32::from_rgb(150, 150, 150)));
-                            ui.add_space(12.0);
+                            section_header(ui, "03 // CORE CONTROLS");
+                            bento_slider(ui, "CUTOFF FREQ:", &params_clone.cutoff, param_setter, 200.0);
+                            bento_slider(ui, "RESONANCE:", &params_clone.resonance, param_setter, 200.0);
 
-                            ui.label(egui::RichText::new("CUTOFF FREQ:").size(10.0).color(egui::Color32::from_rgb(100, 100, 105)));
                             ui.add_space(4.0);
-                            ui.scope(|ui| {
-                                ui.spacing_mut().slider_width = 200.0;
-                                ui.add(widgets::ParamSlider::for_param(&params_clone.cutoff, param_setter));
-                            });
-
-                            ui.add_space(12.0);
-
-                            ui.label(egui::RichText::new("RESONANCE:").size(10.0).color(egui::Color32::from_rgb(100, 100, 105)));
-                            ui.add_space(4.0);
-                            ui.scope(|ui| {
-                                ui.spacing_mut().slider_width = 200.0;
-                                ui.add(widgets::ParamSlider::for_param(&params_clone.resonance, param_setter));
-                            });
-
-                            ui.add_space(8.0);
                             ui.horizontal(|ui| {
-                                ui.label("SLOPE:");
+                                ui.label(egui::RichText::new("SLOPE:").size(10.0).color(TEXT_DARK));
                                 let is_24 = params_clone.slope.value();
 
-                                ui.scope(|ui| {
-                                    // 1. Копируем стили из блока фильтров для консистентности
-                                    ui.visuals_mut().widgets.inactive.bg_fill = egui::Color32::from_gray(35); 
-                                    ui.visuals_mut().widgets.inactive.bg_stroke = egui::Stroke::new(1.0, egui::Color32::from_gray(60));
-                                    ui.visuals_mut().widgets.inactive.fg_stroke.color = egui::Color32::from_gray(180);
+                                let slope_btn = |ui: &mut egui::Ui, text: &str, target_val: bool| {
+                                    if bento_button(ui, text, is_24 == target_val, None) {
+                                        param_setter.begin_set_parameter(&params_clone.slope);
+                                        param_setter.set_parameter(&params_clone.slope, target_val);
+                                        param_setter.end_set_parameter(&params_clone.slope);
+                                    }
+                                };
 
-                                    ui.visuals_mut().widgets.hovered.bg_fill = egui::Color32::from_gray(55); 
-                                    ui.visuals_mut().widgets.hovered.bg_stroke = egui::Stroke::new(1.0, egui::Color32::from_gray(90));
-                                    ui.visuals_mut().widgets.hovered.fg_stroke.color = egui::Color32::WHITE;
-
-                                    let radius = egui::CornerRadius::same(2);
-                                    ui.visuals_mut().widgets.inactive.corner_radius = radius;
-                                    ui.visuals_mut().widgets.hovered.corner_radius = radius;
-                                    ui.visuals_mut().widgets.active.corner_radius = radius;
-
-                                    // 2. Локальная функция для отрисовки кнопок Slope
-                                    let slope_btn = |ui: &mut egui::Ui, text: &str, target_val: bool| {
-                                        let is_active = is_24 == target_val;
-
-                                        let text_color = if is_active {
-                                            egui::Color32::WHITE
-                                        } else {
-                                            ui.visuals().widgets.inactive.fg_stroke.color
-                                        };
-
-                                        let mut button = egui::Button::new(egui::RichText::new(text).color(text_color));
-
-                                        if is_active {
-                                            button = button
-                                                .fill(egui::Color32::from_rgb(255, 0, 51)) // Красный акцент
-                                                .stroke(egui::Stroke::NONE);
-                                        }
-
-                                        if ui.add(button).clicked() {
-                                            param_setter.begin_set_parameter(&params_clone.slope);
-                                            param_setter.set_parameter(&params_clone.slope, target_val);
-                                            param_setter.end_set_parameter(&params_clone.slope);
-                                        }
-                                    };
-
-                                    // 3. Выводим сами кнопки
-                                    slope_btn(ui, "[ 12 dB ]", false);
-                                    slope_btn(ui, "[ 24 dB ]", true);
-                                });
-                            })
+                                // 3. Выводим сами кнопки
+                                slope_btn(ui, "[ 12 dB ]", false);
+                                slope_btn(ui, "[ 24 dB ]", true);
+                            });
                         });
                     });
 
@@ -367,26 +273,12 @@ pub fn create_ui(
                     bento_frame().show(ui, |ui| {
                         ui.vertical(|ui| { 
                             ui.set_width(ui.available_width());
-                            
-                            ui.label(egui::RichText::new("04 // SATURATION & OUTPUT").color(egui::Color32::from_rgb(150, 150, 150)));
-                            ui.add_space(12.0);
+                            ui.set_height(ui.available_height());
+                            section_header(ui, "04 // SATURATION & OUTPUT");
 
-                            ui.label(egui::RichText::new("DRIVE AMOUNT:").size(10.0).color(egui::Color32::from_rgb(100, 100, 105)));
-                            ui.add_space(4.0);
-                            ui.scope(|ui| {
-                                ui.spacing_mut().slider_width = 200.0;
-                                ui.add(widgets::ParamSlider::for_param(&params_clone.drive, param_setter));
-
-                                ui.add_space(5.0);
-
-                                ui.label(egui::RichText::new("DRY / WET MIX:").size(10.0).color(egui::Color32::from_rgb(100, 100, 105)));
-                                ui.add(widgets::ParamSlider::for_param(&params_clone.mix, param_setter));
-
-                                ui.add_space(8.0);
-
-                                ui.label(egui::RichText::new("OUTPUT LEVEL:").size(10.0).color(egui::Color32::from_rgb(100, 100, 105)));
-                                ui.add(widgets::ParamSlider::for_param(&params_clone.out_level, param_setter));
-                            });
+                            bento_slider(ui, "DRIVE AMOUNT:", &params_clone.drive, param_setter, 200.0);
+                            bento_slider(ui, "DRY / WET MIX:", &params_clone.mix, param_setter, 200.0);
+                            bento_slider(ui, "OUTPUT LEVEL:", &params_clone.out_level, param_setter, 200.0);
                         });
                     });
             });
