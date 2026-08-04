@@ -114,7 +114,8 @@ impl Default for Flt01 {
                 FloatRange::Linear { min: -24.0, max: 12.0 },
             )
             .with_unit(" dB")
-            .with_step_size(0.01),
+            .with_step_size(0.01)
+            .with_smoother(SmoothingStyle::Linear(50.0)),
             }),
 
             sample_rate: 44100.0,
