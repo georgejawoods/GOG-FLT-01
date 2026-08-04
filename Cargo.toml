@@ -11,7 +11,7 @@ crate-type = ["cdylib", "lib"]
 [dependencies]
 nih_plug = { git = "https://github.com/robbert-vdh/nih-plug.git", features = ["assert_process_allocs", "standalone"] }
 nih_plug_egui = { git = "https://github.com/robbert-vdh/nih-plug.git" }
-gog_common = { path = "../gog_common" }
+gog_common = { git = "https://github.com/georgejawoods/GOG-COMMON.git" }
 
 [[bin]]
 name = "gog_flt_01_desktop"
